@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      is_nightly:
+        description: 'Is this a nightly build?'
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+  push:
+
+jobs:
+  build-and-test:
+    name: Run on ${{ matrix.os }} with SOFA ${{ matrix.sofa_branch }} and python ${{ matrix.python_version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+        sofa_branch: [master]
+        python_version: ['3.8']
+
+    steps:
+      - name: Test download latest SOFA master release from Github
+        shell: bash
+        run: |
+          # directory does not exist or is empty
+          mkdir -p "${RUNNER_TEMP}/sofa_tmp/zip" "${RUNNER_TEMP}/sofa_tmp/binaries"
+          curl --output "${RUNNER_TEMP}/sofa_tmp/Linux.zip" -L \
+            https://github.com/sofa-framework/sofa/releases/download/v23.06.00/SOFA_v23.06.00_Linux.zip
+          unzip -q "${RUNNER_TEMP}/sofa_tmp/Linux.zip" -d "${RUNNER_TEMP}/sofa_tmp/zip"
+          echo '--------------------------------------------'
+          echo "SOFA successfully downloaded and installed in ${RUNNER_TEMP}/sofa_tmp/zip"
+          echo "Contents of directory:"
+          ls -al "${RUNNER_TEMP}/sofa_tmp/zip"
+          rm -rf "${RUNNER_TEMP}/sofa_tmp/"
+
+      - name: Test download latest SOFA master from Jenkins
+        shell: bash
+        run: |
+          # directory does not exist or is empty
+          mkdir -p "${RUNNER_TEMP}/sofa_tmp/zip" "${RUNNER_TEMP}/sofa_tmp/binaries"
+          curl --output "${RUNNER_TEMP}/sofa_tmp/Linux.zip" -L \
+            https://ci.inria.fr/sofa-ci-dev/job/nightly-generate-binaries/CI_BRANCH=master,CI_SCOPE=standard/lastSuccessfulBuild/artifact/Linux/*zip*/Linux.zip
+          unzip -q "${RUNNER_TEMP}"/sofa_tmp/Linux.zip -d "${RUNNER_TEMP}/sofa_tmp/zip"
+          unzip -qq "${RUNNER_TEMP}"/sofa_tmp/zip/Linux/SOFA_*.zip -d "${RUNNER_TEMP}/sofa_tmp/binaries"
+          echo '--------------------------------------------'
+          echo "SOFA successfully downloaded and installed in ${RUNNER_TEMP}"/sofa_tmp/binaries"
+          echo "Contents of directory:"
+          ls -al
+            
+      - name: Setup SOFA and environment using sofa-setup-action
+        id: sofa
+        uses: sofa-framework/sofa-setup-action@v4
+        with:
+          sofa_root: ${{ github.workspace }}/sofa
+          sofa_version: ${{ matrix.sofa_branch }}
+          sofa_scope: 'standard'
+          sofa_with_sofapython3: 'false'
+          python_version: '${{ matrix.python_version }}'
